@@ -1,0 +1,16 @@
+/.vscode
+/__pycache__
+*.pickle
+*.jpg
+*.bmp
+*.gif
+*.jpeg
+*.png
+*.pbm
+*.pgm
+*.ppm
+*.xbm
+*.xpm
+data/dnn/yolo/config/coco.names
+data/dnn/yolo/config/yolov3.cfg
+data/dnn/yolo/config/yolov3.weights
