@@ -281,7 +281,7 @@ class ImageFileSelector(QWidget):
 
         # Get all the image files in the directory
         files = [f for f in listdir(self.album_path)
-                 if isfile(join(self.album_path, f))]
+                 if isfile(join(self.album_path, f)) and filename_has_image_extension(f)]
         if len(files) == 0:
             return
 
