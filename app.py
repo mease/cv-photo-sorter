@@ -403,6 +403,7 @@ class MainWidget(QWidget):
 
     # Refresh the image selector
     def refresh_nav(self, sort=None, thresh=None, filter=None, filter_cascade=None):
+        print(f'filter_cascade: {filter_cascade}')
         self.image_file_selector = ImageFileSelector(
             album_path=IMAGE_DIR,
             display_image=self.display_image, sort=sort, thresh=thresh, filter=filter, filter_cascade=filter_cascade)
@@ -417,6 +418,10 @@ class MainWidget(QWidget):
     # Show the options dialog
     def show_options(self):
         self.options.show()
+
+    # Refresh callback
+    def refresh(self):
+        self.refresh_nav()
 
     # Sort by histogram
     def hist_sort(self):
@@ -475,7 +480,7 @@ class App(QMainWindow):
 
         refreshAct = QAction('&Refresh', self)
         refreshAct.setStatusTip('Refresh images')
-        refreshAct.triggered.connect(self.main_widget.refresh_nav)
+        refreshAct.triggered.connect(self.main_widget.refresh)
 
         exitAct = QAction('&Exit', self)
         exitAct.setStatusTip('Exit application')
