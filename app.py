@@ -40,7 +40,7 @@ def filename_has_image_extension(filename):
 
 # Dialog for selecting options.
 class OptionsDialog(QDialog):
-    def __init__(self, hist_quant=0.85, sift_quant=0.97, orb_quant=0.97):
+    def __init__(self, hist_quant=0.85, sift_quant=0.98, orb_quant=0.98):
         QDialog.__init__(self)
         self.setWindowTitle('Options')
         self.setWindowModality(Qt.ApplicationModal)
