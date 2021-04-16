@@ -40,45 +40,45 @@ def filename_has_image_extension(filename):
 
 # Dialog for selecting options.
 class OptionsDialog(QDialog):
-    def __init__(self, hist_quant=0.85, sift_thresh=0.05, orb_thresh=0.05):
+    def __init__(self, hist_quant=0.85, sift_quant=0.97, orb_quant=0.97):
         QDialog.__init__(self)
         self.setWindowTitle('Options')
         self.setWindowModality(Qt.ApplicationModal)
 
         layout = QVBoxLayout(self)
 
-        # Option for the histogram method affinity propagation quantile
-        quant_label = QLabel()
-        quant_label.setText('Histogram quantile:')
+        # Option for the histogram sorting affinity propagation quantile
+        hist_quant_label = QLabel()
+        hist_quant_label.setText('Histogram AP preference quantile:')
         self.hist_quant = QLineEdit(self)
         self.hist_quant.setValidator(QDoubleValidator())
         self.hist_quant.setText(str(hist_quant))
-        quant_layout = QHBoxLayout()
-        quant_layout.addWidget(quant_label)
-        quant_layout.addWidget(self.hist_quant)
-        layout.addLayout(quant_layout)
+        hist_quant_layout = QHBoxLayout()
+        hist_quant_layout.addWidget(hist_quant_label)
+        hist_quant_layout.addWidget(self.hist_quant)
+        layout.addLayout(hist_quant_layout)
 
-        # Option for the SIFT sorting threshold
-        sift_label = QLabel()
-        sift_label.setText('SIFT threshold:')
-        self.sift_thresh = QLineEdit(self)
-        self.sift_thresh.setValidator(QDoubleValidator())
-        self.sift_thresh.setText(str(sift_thresh))
-        sift_layout = QHBoxLayout()
-        sift_layout.addWidget(sift_label)
-        sift_layout.addWidget(self.sift_thresh)
-        layout.addLayout(sift_layout)
+        # Option for the SIFT sorting affinity propagation quantile
+        sift_quant_label = QLabel()
+        sift_quant_label.setText('SIFT AP preference quantile:')
+        self.sift_quant = QLineEdit(self)
+        self.sift_quant.setValidator(QDoubleValidator())
+        self.sift_quant.setText(str(sift_quant))
+        sift_quant_layout = QHBoxLayout()
+        sift_quant_layout.addWidget(sift_quant_label)
+        sift_quant_layout.addWidget(self.sift_quant)
+        layout.addLayout(sift_quant_layout)
 
-        # Option for the ORB sorting threshold
-        orb_label = QLabel()
-        orb_label.setText('ORB threshold:')
-        self.orb_thresh = QLineEdit(self)
-        self.orb_thresh.setValidator(QDoubleValidator())
-        self.orb_thresh.setText(str(orb_thresh))
-        orb_layout = QHBoxLayout()
-        orb_layout.addWidget(orb_label)
-        orb_layout.addWidget(self.orb_thresh)
-        layout.addLayout(orb_layout)
+        # Option for the ORB sorting affinity propagation quantile
+        orb_quant_label = QLabel()
+        orb_quant_label.setText('ORB AP preference quantile:')
+        self.orb_quant = QLineEdit(self)
+        self.orb_quant.setValidator(QDoubleValidator())
+        self.orb_quant.setText(str(orb_quant))
+        orb_quant_layout = QHBoxLayout()
+        orb_quant_layout.addWidget(orb_quant_label)
+        orb_quant_layout.addWidget(self.orb_quant)
+        layout.addLayout(orb_quant_layout)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
@@ -90,11 +90,11 @@ class OptionsDialog(QDialog):
     def get_hist_quant(self):
         return float(self.hist_quant.text())
 
-    def get_orb_thresh(self):
-        return float(self.orb_thresh.text())
+    def get_orb_quant(self):
+        return float(self.orb_quant.text())
 
-    def get_sift_thresh(self):
-        return float(self.sift_thresh.text())
+    def get_sift_quant(self):
+        return float(self.sift_quant.text())
 
 
 # General-purpose progress bar
@@ -286,8 +286,9 @@ class ImageGroup(QWidget):
 
 # Image file selector widget
 class ImageFileSelector(QWidget):
-    def __init__(self, parent=None, album_path='', display_image=None, sort=None, thresh=None, filter=None, filter_cascade=None):
+    def __init__(self, options, parent=None, album_path='', display_image=None, sort=None, filter_dnn=None, filter_cascade=None):
         QWidget.__init__(self, parent=parent)
+        self.options = options
         self.album_path = album_path
         self.display_image = display_image
         self.grid_layout = QGridLayout(self)
@@ -305,13 +306,17 @@ class ImageFileSelector(QWidget):
         # Sort images into groups using histogram, SIFT, or ORB features
         if sort is not None:
             if sort == 'hist':
-                sorter = similarity.HistogramGrouper(self.album_path, affinity_preference_quantile=thresh)
+                sorter = similarity.HistogramGrouper(
+                    self.album_path,
+                    affinity_preference_quantile=self.options.get_hist_quant())
             elif sort == 'sift':
                 sorter = similarity.Sift(
-                    self.album_path, similarity_threshold=thresh)
+                    self.album_path,
+                    affinity_preference_quantile=self.options.get_sift_quant())
             elif sort == 'orb':
                 sorter = similarity.Orb(
-                    self.album_path, similarity_threshold=thresh)
+                    self.album_path,
+                    affinity_preference_quantile=self.options.get_orb_quant())
             else:
                 raise 'Invalid sorting choice: ' + sort
 
@@ -344,14 +349,14 @@ class ImageFileSelector(QWidget):
 
         # Filter images classified with DNN
         dnn_detections = None
-        if filter is not None:
+        if filter_dnn is not None:
             progress = ProgressWidget(len(files), 'Filtering images...')
             progress.setGeometry(100, 100, 400, 130)
             progress.show()
 
             yolo = dnn.Yolo()
             filtered, dnn_detections = yolo.filter(
-                self.album_path, files, filter, progress)
+                self.album_path, files, filter_dnn, progress)
             group_list = [filtered]
 
             progress.close()
@@ -402,6 +407,7 @@ class MainWidget(QWidget):
 
         self.display_image = DisplayImage(self)
         self.image_file_selector = ImageFileSelector(
+            self.options,
             album_path=IMAGE_DIR,
             display_image=self.display_image)
         scroll = QScrollArea()
@@ -416,12 +422,13 @@ class MainWidget(QWidget):
         self.setLayout(self.layout)
 
     # Refresh the image selector
-    def refresh_nav(self, sort=None, thresh=None, filter=None, filter_cascade=None):
+    def refresh_nav(self, sort=None, filter_dnn=None, filter_cascade=None):
         self.image_file_selector = ImageFileSelector(
+            self.options,
             album_path=IMAGE_DIR,
             display_image=self.display_image,
-            sort=sort, thresh=thresh,
-            filter=filter,
+            sort=sort,
+            filter_dnn=filter_dnn,
             filter_cascade=filter_cascade)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -441,26 +448,23 @@ class MainWidget(QWidget):
 
     # Sort by histogram
     def hist_sort(self):
-        thresh = self.options.get_hist_quant()
-        self.refresh_nav('hist', thresh, None, None)
+        self.refresh_nav('hist', None, None)
 
     # Sort by SIFT features
     def sift_sort(self):
-        thresh = self.options.get_sift_thresh()
-        self.refresh_nav('sift', thresh, None, None)
+        self.refresh_nav('sift', None, None)
 
     # Sort by ORB features
     def orb_sort(self):
-        thresh = self.options.get_orb_thresh()
-        self.refresh_nav('orb', thresh, None, None)
+        self.refresh_nav('orb', None, None)
 
     # Filter by DNN classification
-    def filter(self, label):
-        self.refresh_nav(None, None, label, None)
+    def filter_dnn(self, label):
+        self.refresh_nav(None, label, None)
 
     # Filter by HAAR cascade classification
     def filter_cascade(self, label):
-        self.refresh_nav(None, None, None, label)
+        self.refresh_nav(None, None, label)
 
     # Resize displayed image on window resize
     def on_main_window_resize(self, event):
@@ -540,7 +544,7 @@ class App(QMainWindow):
             filtAct = QAction(f'&{label}', self)
             filtAct.setStatusTip(f'Filter {label}')
             filtAct.triggered.connect(
-                lambda state, x=label: self.main_widget.filter(x))
+                lambda state, x=label: self.main_widget.filter_dnn(x))
             filterDNNMenu.addAction(filtAct)
 
         self.setMenuBar(menuBar)

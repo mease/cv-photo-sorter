@@ -27,7 +27,7 @@ copyreg.pickle(cv.KeyPoint().__class__, _pickle_keypoints)
 # Group objects based on their histogram similarity.
 #   https://docs.opencv.org/3.4/d8/dc8/tutorial_histogram_comparison.html
 class HistogramGrouper:
-    def __init__(self, img_path, affinity_preference_quantile=0.85):
+    def __init__(self, img_path, affinity_preference_quantile):
         self.img_path = img_path
         self.affinity_preference_quantile = affinity_preference_quantile
 
@@ -81,8 +81,8 @@ class HistogramGrouper:
 
 # General purpose feature detector for grouping similar images.
 class FeatureDetector:
-    def __init__(self, img_path, data_path, detector, matcher, similarity_threshold=0.05):
-        self.similarity_threshold = similarity_threshold
+    def __init__(self, img_path, data_path, detector, matcher, affinity_preference_quantile):
+        self.affinity_preference_quantile = affinity_preference_quantile
         self.data_path = data_path
         self.img_path = img_path
         self.sim_file = join(self.data_path, 'similarities.pickle')
@@ -170,7 +170,7 @@ class FeatureDetector:
         return similarity
 
     # Group similar images in a list of images.
-    def group_similar(self, progress, files, threshold=0.05):
+    def group_similar(self, progress, files):
         # Create similarity matrix
         similarity = np.zeros((len(files), len(files)))
         for i in range(len(files)):
@@ -182,47 +182,36 @@ class FeatureDetector:
                     similarity[i,j] = self.get_similarity(files[i], files[j])
                     similarity[j,i] = similarity[i,j]
             progress.increment(1)
+        
+        # Compute the preference for affinity prop by taking the provided quantile from all similarities.
+        mask = np.ones(similarity.shape, dtype=bool)
+        np.fill_diagonal(mask, 0)
+        preference = np.quantile(similarity[mask], self.affinity_preference_quantile)
 
         # Cluster with Affinity Propagation
         progress.set_status('Clustering')
-        clustering = AffinityPropagation(affinity='precomputed',
-                                         max_iter=1_000,
-                                         convergence_iter=100,
-                                         random_state=None).fit_predict(similarity)
+
+        clustering = [-1]
+        retries = 3
+        while -1 in clustering and retries > 0:
+            # Affinity propagation sometimes fails to converge. Retry up to 3 times.
+            clustering = AffinityPropagation(affinity='precomputed',
+                                            preference=preference,
+                                            max_iter=1_000,
+                                            convergence_iter=100,
+                                            random_state=None).fit_predict(similarity)
+            retries -= 1
+        
+        # Make groups from the clustering.
         groups = []
         for c in set(clustering):
             groups.append([i for index, i in enumerate(files) if clustering[index] == c])
-        
-        # Affinity propagations gives a decent starting point for the groupings,
-        # but it tends to mis-group several objects. Here we are checking all the
-        # groups and removing any photos that have a similarity less than a particular
-        # threshold compared to the other photos in the group.
-        new_groups = []
-        for group in groups:
-            removed = []
-            for i in range(len(group)):
-                i_idx = files.index(group[i])
-                sims = []
-                for j in range(len(group)):
-                    if (i != j):
-                        j_idx = files.index(group[j])
-                        sims.append(similarity[i_idx, j_idx])
-
-                if max(sims) < threshold:
-                    removed.append(files[i_idx])
-            
-            new_group = group
-            for f in removed:
-                new_groups.append([f])
-                new_group.remove(f)
-            new_groups.append(new_group)
-
-        return new_groups
+        return groups
 
 
 # SIFT feature detector
 class Sift(FeatureDetector):
-    def __init__(self, img_path, similarity_threshold=0.05):
+    def __init__(self, img_path, affinity_preference_quantile):
         super().__init__(img_path,
                          './data/sift/',
                          cv.SIFT_create(nfeatures=500),
@@ -231,12 +220,12 @@ class Sift(FeatureDetector):
                                   trees=5),
                              dict(checks=50)
                          ),
-                         similarity_threshold)
+                         affinity_preference_quantile)
 
 
 # ORB feature detector
 class Orb(FeatureDetector):
-    def __init__(self, img_path, similarity_threshold=0.05):
+    def __init__(self, img_path, affinity_preference_quantile):
         super().__init__(img_path,
                          './data/orb/',
                          cv.ORB_create(),
@@ -248,4 +237,4 @@ class Orb(FeatureDetector):
                                   multi_probe_level=2),
                              dict()
                          ),
-                         similarity_threshold)
+                         affinity_preference_quantile)
