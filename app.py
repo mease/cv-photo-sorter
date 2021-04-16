@@ -40,12 +40,23 @@ def filename_has_image_extension(filename):
 
 # Dialog for selecting options.
 class OptionsDialog(QDialog):
-    def __init__(self, sift_thresh=0.05, orb_thresh=0.05):
+    def __init__(self, hist_quant=0.85, sift_thresh=0.05, orb_thresh=0.05):
         QDialog.__init__(self)
         self.setWindowTitle('Options')
         self.setWindowModality(Qt.ApplicationModal)
 
         layout = QVBoxLayout(self)
+
+        # Option for the histogram method affinity propagation quantile
+        quant_label = QLabel()
+        quant_label.setText('Histogram quantile:')
+        self.hist_quant = QLineEdit(self)
+        self.hist_quant.setValidator(QDoubleValidator())
+        self.hist_quant.setText(str(hist_quant))
+        quant_layout = QHBoxLayout()
+        quant_layout.addWidget(quant_label)
+        quant_layout.addWidget(self.hist_quant)
+        layout.addLayout(quant_layout)
 
         # Option for the SIFT sorting threshold
         sift_label = QLabel()
@@ -75,6 +86,9 @@ class OptionsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def get_hist_quant(self):
+        return float(self.hist_quant.text())
 
     def get_orb_thresh(self):
         return float(self.orb_thresh.text())
@@ -291,7 +305,7 @@ class ImageFileSelector(QWidget):
         # Sort images into groups using histogram, SIFT, or ORB features
         if sort is not None:
             if sort == 'hist':
-                sorter = similarity.HistogramGrouper(self.album_path)
+                sorter = similarity.HistogramGrouper(self.album_path, affinity_preference_quantile=thresh)
             elif sort == 'sift':
                 sorter = similarity.Sift(
                     self.album_path, similarity_threshold=thresh)
@@ -403,10 +417,12 @@ class MainWidget(QWidget):
 
     # Refresh the image selector
     def refresh_nav(self, sort=None, thresh=None, filter=None, filter_cascade=None):
-        print(f'filter_cascade: {filter_cascade}')
         self.image_file_selector = ImageFileSelector(
             album_path=IMAGE_DIR,
-            display_image=self.display_image, sort=sort, thresh=thresh, filter=filter, filter_cascade=filter_cascade)
+            display_image=self.display_image,
+            sort=sort, thresh=thresh,
+            filter=filter,
+            filter_cascade=filter_cascade)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFixedWidth(175)
@@ -425,7 +441,8 @@ class MainWidget(QWidget):
 
     # Sort by histogram
     def hist_sort(self):
-        self.refresh_nav('hist', None, None, None)
+        thresh = self.options.get_hist_quant()
+        self.refresh_nav('hist', thresh, None, None)
 
     # Sort by SIFT features
     def sift_sort(self):

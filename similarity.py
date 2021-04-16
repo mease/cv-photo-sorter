@@ -13,8 +13,7 @@ import copyreg
 from os import listdir, makedirs
 from os.path import join, exists
 from PyQt5.QtWidgets import QApplication
-from sklearn.cluster import AffinityPropagation, DBSCAN
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.cluster import AffinityPropagation
 
 
 # Helper for cacheing keypoint data.
@@ -28,8 +27,9 @@ copyreg.pickle(cv.KeyPoint().__class__, _pickle_keypoints)
 # Group objects based on their histogram similarity.
 #   https://docs.opencv.org/3.4/d8/dc8/tutorial_histogram_comparison.html
 class HistogramGrouper:
-    def __init__(self, img_path):
+    def __init__(self, img_path, affinity_preference_quantile=0.85):
         self.img_path = img_path
+        self.affinity_preference_quantile = affinity_preference_quantile
 
     # Group similar photos in a list of photos.
     def group_similar(self, progress, files):
@@ -43,6 +43,7 @@ class HistogramGrouper:
         ranges = h_ranges + s_ranges
         channels = [0, 1]
 
+        # Compute histograms for all files
         for f in files:
             progress.set_status(f'Computing histograms: {f}')
             img = cv.imread(join(self.img_path, f))
@@ -52,16 +53,26 @@ class HistogramGrouper:
             hists.append(hist)
             progress.increment(1)
 
+        # Construct similarity matrix
         similarity = np.zeros((len(files), len(files)))
         for i in range(len(files)):
             progress.set_status(f'Comparing histograms: {files[i]}')
             for j in range(i, len(files)):
-                similarity[i,j] = cv.compareHist(hists[i], hists[j], 0)
+                similarity[i,j] = cv.compareHist(hists[i], hists[j], cv.HISTCMP_CORREL)
                 similarity[j,i] = similarity[i,j]
 
         # Cluster with Affinity Propagation
         progress.set_status('Clustering')
-        clustering = AffinityPropagation(affinity='precomputed', random_state=None).fit_predict(similarity)
+
+        # Compute the preference for affinity prop by taking the provided quantile from all similarities.
+        mask = np.ones(similarity.shape, dtype=bool)
+        np.fill_diagonal(mask, 0)
+        preference = np.quantile(similarity[mask], self.affinity_preference_quantile)
+        clustering = AffinityPropagation(affinity='precomputed',
+                                         preference=preference,
+                                         random_state=None).fit_predict(similarity)
+        
+        # Make groups from the clustering.
         groups = []
         for c in set(clustering):
             groups.append([i for index, i in enumerate(files) if clustering[index] == c])
