@@ -13,4 +13,6 @@ Download the files from the following URLs and place them in `data\dnn\yolo\conf
 - https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg
 - https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
 
+Place photos in the `photos` directory.
+
 Run the application with: `python app.py`.
